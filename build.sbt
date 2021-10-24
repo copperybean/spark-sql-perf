@@ -44,6 +44,8 @@ libraryDependencies += "org.yaml" % "snakeyaml" % "1.17"
 
 libraryDependencies += "com.typesafe.scala-logging" %% "scala-logging-slf4j" % "2.1.2"
 
+assemblyOption in assembly := (assemblyOption in assembly).value.copy(includeScala = false)
+
 fork := true
 
 // Your username to login to Databricks Cloud
