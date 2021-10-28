@@ -17,7 +17,8 @@
 
 // IMPORTANT: SET PARAMETERS!!!
 // TPCDS Scale factor
-val scaleFactor = "1"
+val scaleFactor = 1
+val dsdgenDir = "/opt/tpcds-kit/tools"
 
 // data format.
 val format = "parquet"
@@ -42,7 +43,7 @@ val databaseName = s"tpcds_sf${scaleFactor}" +
 
 // Create the table schema with the specified parameters.
 import com.databricks.spark.sql.perf.tpcds.TPCDSTables
-val tables = new TPCDSTables(sqlContext, dsdgenDir = "/tmp/tpcds-kit/tools", scaleFactor = scaleFactor, useDoubleForDecimal = !useDecimal, useStringForDate = !useDate)
+val tables = new TPCDSTables(spark.sqlContext, dsdgenDir = dsdgenDir, scaleFactor = scaleFactor + "", useDoubleForDecimal = !useDecimal, useStringForDate = !useDate)
 
 // COMMAND ----------
 
@@ -108,13 +109,15 @@ import org.apache.spark.deploy.SparkHadoopUtil
 // Limit the memory used by parquet writer
 SparkHadoopUtil.get.conf.set("parquet.memory.pool.ratio", "0.1")
 // Compress with snappy:
-sqlContext.setConf("spark.sql.parquet.compression.codec", "snappy")
+spark.sqlContext.setConf("spark.sql.parquet.compression.codec", "snappy")
 // TPCDS has around 2000 dates.
-spark.conf.set("spark.sql.shuffle.partitions", "2000")
+if (scaleFactor >= 1000) {
+  spark.conf.set("spark.sql.shuffle.partitions", "2000")
+}
 // Don't write too huge files.
-sqlContext.setConf("spark.sql.files.maxRecordsPerFile", "20000000")
+spark.sqlContext.setConf("spark.sql.files.maxRecordsPerFile", "20000000")
 
-val dsdgen_partitioned=10000 // recommended for SF10000+.
+val dsdgen_partitioned=scaleFactor * 2 // recommended for SF10000+.
 val dsdgen_nonpartitioned=10 // small tables do not need much parallelism in generation.
 
 // COMMAND ----------

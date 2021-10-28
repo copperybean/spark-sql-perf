@@ -6,11 +6,15 @@
 
 // Database to be used:
 // TPCDS Scale factor
-val scaleFactor = "1"
+val scaleFactor = 1
 // If false, float type will be used instead of decimal.
 val useDecimal = true
 // If false, string type will be used instead of date.
 val useDate = true
+
+val filterNull = false
+val shuffle = true
+
 // name of database to be used.
 val databaseName = s"tpcds_sf${scaleFactor}" +
   s"""_${if (useDecimal) "with" else "no"}decimal""" +
@@ -43,7 +47,7 @@ sql(s"use $databaseName")
 
 import com.databricks.spark.sql.perf.tpcds.TPCDS
 
-val tpcds = new TPCDS (sqlContext = sqlContext)
+val tpcds = new TPCDS (sqlContext = spark.sqlContext)
 def queries = {
   val filtered_queries = query_filter match {
     case Seq() => tpcds.tpcds2_4Queries
@@ -55,7 +59,7 @@ val experiment = tpcds.runExperiment(
   queries, 
   iterations = iterations,
   resultLocation = resultLocation,
-  tags = Map("runtype" -> "benchmark", "database" -> databaseName, "scale_factor" -> scaleFactor))
+  tags = Map("runtype" -> "benchmark", "database" -> databaseName, "scale_factor" -> (scaleFactor + "")))
 
 println(experiment.toString)
 experiment.waitForFinish(timeout*60*60)
