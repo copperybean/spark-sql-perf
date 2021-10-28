@@ -40,6 +40,8 @@ libraryDependencies += "org.scalatest" %% "scalatest" % "3.0.5" % "test"
 
 libraryDependencies += "org.yaml" % "snakeyaml" % "1.23"
 
+assemblyOption in assembly := (assemblyOption in assembly).value.copy(includeScala = false)
+
 fork := true
 
 // Your username to login to Databricks Cloud
