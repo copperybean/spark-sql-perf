@@ -311,13 +311,19 @@ abstract class Tables(sqlContext: SQLContext, scaleFactor: String,
     }
   }
 
-  def createExternalTables(location: String, format: String, databaseName: String,
+  def createExternalTables(location: String, format: String, databaseName: String, partitionTables: Boolean,
       overwrite: Boolean, discoverPartitions: Boolean, tableFilter: String = ""): Unit = {
 
-    val filtered = if (tableFilter.isEmpty) {
+    val tablesToBeGenerated = if (partitionTables) {
       tables
     } else {
-      tables.filter(_.name == tableFilter)
+      tables.map(_.nonPartitioned)
+    }
+
+    val filtered = if (tableFilter.isEmpty) {
+      tablesToBeGenerated
+    } else {
+      tablesToBeGenerated.filter(_.name == tableFilter)
     }
 
     sqlContext.sql(s"CREATE DATABASE IF NOT EXISTS $databaseName")

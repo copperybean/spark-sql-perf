@@ -32,9 +32,9 @@ case class GenTPCDSDataConfig(
  * Gen TPCDS data.
  */
 object GenTPCDSData {
-  def main(args: Array[String]): Unit = {
-    val defaultConf = GenTPCDSDataConfig()
+  val defaultConf = GenTPCDSDataConfig()
 
+  def main(args: Array[String]): Unit = {
     val parser = new scopt.OptionParser[GenTPCDSDataConfig]("Gen-TPC-DS-data") {
       BaseTPCDSDataConfig.parseConfig[GenTPCDSDataConfig](this, (baseUpdated, conf) => {
         conf.copy(baseConfig = baseUpdated)
@@ -59,11 +59,11 @@ object GenTPCDSData {
       opt[Seq[String]]('p', "partitionTables")
         .action((x, c) => c.copy(partitionTables = x))
         .valueName(defaultConf.partitionTables.mkString(","))
-        .text("create the partitioned fact tables")
+        .text("the partitioned tables, \"all\" means all tables")
       opt[Seq[String]]('n', "noPartitionedTables")
         .action((x, c) => c.copy(noPartitionedTables = x))
         .valueName(defaultConf.noPartitionedTables.mkString(","))
-        .text("\"\" means generate all tables")
+        .text("the no partitioned tables,  \"all\" means all tables")
       help("help")
         .text("prints this usage text")
     }
@@ -100,8 +100,29 @@ object GenTPCDSData {
       useDoubleForDecimal = config.baseConfig.useDoubleForDecimal,
       useStringForDate = config.baseConfig.useStringForDate)
 
+    val allTableNames = defaultConf.partitionTables ++ defaultConf.noPartitionedTables
+    def getTableNames(tables: Seq[String]): Seq[String] = {
+      if (tables.contains("all")) {
+        allTableNames
+      } else {
+        val ret = tables.filter(_.nonEmpty)
+        val invalids = ret.diff(allTableNames)
+        if (invalids.nonEmpty) {
+          throw new Exception("invalid table names: " + invalids.mkString(","))
+        }
+        ret
+      }
+    }
+    val noPartitionedTables = getTableNames(config.noPartitionedTables)
+    val partitionTables = getTableNames(config.partitionTables)
+    val duplicatedTables = noPartitionedTables.intersect(partitionTables)
+    if (duplicatedTables.nonEmpty) {
+      throw new Exception(duplicatedTables.mkString(",") +
+        "are duplicated between partitioned and non partitioned tables")
+    }
+
     // currently, partitioned and no partitioned tables are same logic
-    config.noPartitionedTables.filter(_.nonEmpty).foreach { t =>
+    noPartitionedTables.foreach { t =>
       tables.genData(
         location = rootDir,
         format = config.baseConfig.format,
@@ -111,10 +132,11 @@ object GenTPCDSData {
         filterOutNullPartitionValues = config.baseConfig.filterOutNullPartitionValues,
         tableFilter = t,
         numPartitions = 10)
+      println(s"Data of no partitioned table $t generated")
     }
     println("Done generating non partitioned tables.")
 
-    config.partitionTables.filter(_.nonEmpty).foreach { t =>
+    partitionTables.foreach { t =>
       tables.genData(
         location = rootDir,
         format = config.baseConfig.format,
@@ -124,6 +146,7 @@ object GenTPCDSData {
         filterOutNullPartitionValues = config.baseConfig.filterOutNullPartitionValues,
         tableFilter = t,
         numPartitions = config.baseConfig.scaleFactor * 2)
+      println(s"Data of partitioned table $t generated")
     }
     println("Done generating partitioned tables.")
 
@@ -133,21 +156,37 @@ object GenTPCDSData {
     spark.sql(s"create database $databaseName")
     spark.sql(s"use $databaseName")
 
-    val filteredTables = config.partitionTables.filter(_.nonEmpty) ++ config.noPartitionedTables.filter(_.nonEmpty)
-    filteredTables.foreach { t =>
+    noPartitionedTables.foreach { t =>
       tables.createExternalTables(
         rootDir,
         config.baseConfig.format,
         databaseName,
+        false,
         overwrite = config.overwrite,
         discoverPartitions = true,
         tableFilter = t)
+      println(s"No partitioned table $t created")
     }
+    println("Done creating no partitioned tables")
+    partitionTables.foreach { t =>
+      tables.createExternalTables(
+        rootDir,
+        config.baseConfig.format,
+        databaseName,
+        true,
+        overwrite = config.overwrite,
+        discoverPartitions = true,
+        tableFilter = t)
+      println(s"Partitioned table $t created")
+    }
+    println("Done creating partitioned tables")
 
     if (config.analyzeTables) {
-      filteredTables.foreach { t =>
+      (noPartitionedTables ++ partitionTables).foreach { t =>
         tables.analyzeTables(databaseName, analyzeColumns = true, tableFilter = t)
+        println(s"Analyze table $t finished")
       }
+      println("Done analyzing tables")
     }
   }
 }
