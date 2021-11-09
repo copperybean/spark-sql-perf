@@ -21,7 +21,6 @@ import org.apache.spark.sql.SparkSession
 case class GenTPCDSDataConfig(
     baseConfig: BaseTPCDSDataConfig = BaseTPCDSDataConfig(),
     dsdgenDir: String = "/opt/tpcds-kit/tools",
-    location: String = "/mnt/performance-datasets",
     overwrite: Boolean = false,
     analyzeTables: Boolean = true,
     partitionTables: Seq[String] = Seq("inventory", "web_returns", "catalog_returns", "store_returns", "web_sales", "catalog_sales", "store_sales"),
@@ -35,7 +34,7 @@ object GenTPCDSData {
   val defaultConf = GenTPCDSDataConfig()
 
   def main(args: Array[String]): Unit = {
-    val parser = new scopt.OptionParser[GenTPCDSDataConfig]("Gen-TPC-DS-data") {
+    val parser = new scopt.OptionParser[GenTPCDSDataConfig]("Generate TPC-DS Data") {
       BaseTPCDSDataConfig.parseConfig[GenTPCDSDataConfig](this, (baseUpdated, conf) => {
         conf.copy(baseConfig = baseUpdated)
       })
@@ -44,10 +43,6 @@ object GenTPCDSData {
         .action { (x, c) => c.copy(dsdgenDir = x) }
         .valueName(defaultConf.dsdgenDir)
         .text("location of dsdgen")
-      opt[String]('l', "location")
-        .action((x, c) => c.copy(location = x))
-        .valueName(defaultConf.location)
-        .text("root directory of location to create data in")
       opt[Boolean]('o', "overwrite")
         .action((x, c) => c.copy(overwrite = x))
         .valueName(defaultConf.overwrite.toString)
@@ -90,15 +85,16 @@ object GenTPCDSData {
       .config("spark.sql.shuffle.partitions", Math.min(2000, config.baseConfig.scaleFactor * 10))
       .getOrCreate()
 
-    val rootDir = s"${config.location}/tpcds/sf${config.baseConfig.scaleFactor}-${config.baseConfig.format}" +
-        s"/useDecimal=${!config.baseConfig.useDoubleForDecimal},useDate=${!config.baseConfig.useStringForDate}," +
-        s"filterNull=${config.baseConfig.filterOutNullPartitionValues}"
+    val baseConf = config.baseConfig
+    val rootDir = s"${baseConf.location}/tpcds/sf${baseConf.scaleFactor}-${baseConf.format}" +
+        s"/useDecimal=${!baseConf.useDoubleForDecimal},useDate=${!baseConf.useStringForDate}," +
+        s"filterNull=${baseConf.filterOutNullPartitionValues}"
 
     val tables = new TPCDSTables(spark.sqlContext,
       dsdgenDir = config.dsdgenDir,
-      scaleFactor = config.baseConfig.scaleFactor + "",
-      useDoubleForDecimal = config.baseConfig.useDoubleForDecimal,
-      useStringForDate = config.baseConfig.useStringForDate)
+      scaleFactor = baseConf.scaleFactor + "",
+      useDoubleForDecimal = baseConf.useDoubleForDecimal,
+      useStringForDate = baseConf.useStringForDate)
 
     val allTableNames = defaultConf.partitionTables ++ defaultConf.noPartitionedTables
     def getTableNames(tables: Seq[String]): Seq[String] = {
@@ -125,11 +121,11 @@ object GenTPCDSData {
     noPartitionedTables.foreach { t =>
       tables.genData(
         location = rootDir,
-        format = config.baseConfig.format,
+        format = baseConf.format,
         overwrite = config.overwrite,
         partitionTables = false,
-        clusterByPartitionColumns = config.baseConfig.clusterByPartitionColumns,
-        filterOutNullPartitionValues = config.baseConfig.filterOutNullPartitionValues,
+        clusterByPartitionColumns = baseConf.clusterByPartitionColumns,
+        filterOutNullPartitionValues = baseConf.filterOutNullPartitionValues,
         tableFilter = t,
         numPartitions = 10)
       println(s"Data of no partitioned table $t generated")
@@ -139,18 +135,18 @@ object GenTPCDSData {
     partitionTables.foreach { t =>
       tables.genData(
         location = rootDir,
-        format = config.baseConfig.format,
+        format = baseConf.format,
         overwrite = config.overwrite,
         partitionTables = true,
-        clusterByPartitionColumns = config.baseConfig.clusterByPartitionColumns,
-        filterOutNullPartitionValues = config.baseConfig.filterOutNullPartitionValues,
+        clusterByPartitionColumns = baseConf.clusterByPartitionColumns,
+        filterOutNullPartitionValues = baseConf.filterOutNullPartitionValues,
         tableFilter = t,
-        numPartitions = config.baseConfig.scaleFactor * 2)
+        numPartitions = baseConf.scaleFactor * 2)
       println(s"Data of partitioned table $t generated")
     }
     println("Done generating partitioned tables.")
 
-    val databaseName = BaseTPCDSDataConfig.buildDBName(config.baseConfig)
+    val databaseName = baseConf.buildDBName
 
     spark.sql(s"drop database if exists $databaseName cascade")
     spark.sql(s"create database $databaseName")
@@ -159,7 +155,7 @@ object GenTPCDSData {
     noPartitionedTables.foreach { t =>
       tables.createExternalTables(
         rootDir,
-        config.baseConfig.format,
+        baseConf.format,
         databaseName,
         false,
         overwrite = config.overwrite,
@@ -171,7 +167,7 @@ object GenTPCDSData {
     partitionTables.foreach { t =>
       tables.createExternalTables(
         rootDir,
-        config.baseConfig.format,
+        baseConf.format,
         databaseName,
         true,
         overwrite = config.overwrite,

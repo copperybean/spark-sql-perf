@@ -2,13 +2,21 @@ package com.databricks.spark.sql.perf.tpcds
 
 case class BaseTPCDSDataConfig(
   scaleFactor: Int = 1,
+  location: String = "/mnt/performance-datasets",
   format: String = "parquet",
   useDoubleForDecimal: Boolean = false,
   useStringForDate: Boolean = false,
   filterOutNullPartitionValues: Boolean = false,
   clusterByPartitionColumns: Boolean = true,
-  dbPrefix: String = ""
-)
+  dbPrefix: String = "") {
+
+  def buildDBName: String = {
+    s"${dbPrefix}tpcds_sf$scaleFactor" +
+      s"""_${if (useDoubleForDecimal) "no" else "with"}decimal""" +
+      s"""_${if (useStringForDate) "no" else "with"}date""" +
+      s"""_${if (filterOutNullPartitionValues) "no" else "with"}nulls"""
+  }
+}
 
 trait WithBaseTPCDSDataConfig {
   def baseConfig: BaseTPCDSDataConfig
@@ -24,6 +32,11 @@ object BaseTPCDSDataConfig {
       .action((x, c) => updater(c.baseConfig.copy(scaleFactor = x), c))
       .valueName(defaultBaseConfig.scaleFactor.toString)
       .text("scaleFactor defines the size of the dataset to generate (in GB)")
+
+    parser.opt[String]("location")
+      .action((x, c) => updater(c.baseConfig.copy(location = x), c))
+      .valueName(defaultBaseConfig.location)
+      .text("root directory of location to create data or save data in")
 
     parser.opt[String]("format")
       .action((x, c) => updater(c.baseConfig.copy(format = x), c))
@@ -54,12 +67,5 @@ object BaseTPCDSDataConfig {
         .action((x, c) => updater(c.baseConfig.copy(dbPrefix = x), c))
         .valueName(defaultBaseConfig.dbPrefix)
         .text("the prefix of the result DB name")
-  }
-
-  def buildDBName(config: BaseTPCDSDataConfig): String = {
-    s"${config.dbPrefix}tpcds_sf${config.scaleFactor}" +
-        s"""_${if (config.useDoubleForDecimal) "no" else "with"}decimal""" +
-        s"""_${if (config.useStringForDate) "no" else "with"}date""" +
-        s"""_${if (config.filterOutNullPartitionValues) "no" else "with"}nulls"""
   }
 }
