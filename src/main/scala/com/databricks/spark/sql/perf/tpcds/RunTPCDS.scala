@@ -47,7 +47,10 @@ object RunTPCDS {
   }
 
   def run(config: RunTPCDSConfig) {
-    val spark = SparkSession.builder.appName("Run TPCDS").getOrCreate()
+    val spark = SparkSession.builder
+      .appName("Run TPCDS")
+      .enableHiveSupport()
+      .getOrCreate()
 
     val resultLocation = s"${config.baseConfig.location}/tpcds/results"
     val databaseName = config.baseConfig.buildDBName

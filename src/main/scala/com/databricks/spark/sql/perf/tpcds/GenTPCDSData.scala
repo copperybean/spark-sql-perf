@@ -74,6 +74,7 @@ object GenTPCDSData {
   def run(config: GenTPCDSDataConfig) {
     val spark = SparkSession
       .builder()
+      .enableHiveSupport()
       .appName(s"Generate TPCDS Data with scale: ${config.baseConfig.scaleFactor}")
       // Limit the memory used by parquet writer
       .config("spark.hadoop.parquet.memory.pool.ratio", "0.1")
